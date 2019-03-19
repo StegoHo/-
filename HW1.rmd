@@ -1,0 +1,73 @@
+---
+title: "The Effect of Types of Posts on Social Media during Chief Executive Election"
+author: "Stego"
+date: "2019年3月19日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Files
+
+```{r cars}
+allData = data.frame()
+for(fid in c(1:9))
+{
+  filename = paste0("20180",as.character(fid),"_data.csv")
+  tempData = data.table::fread(filename, data.table = F,encoding = 'UTF-8')
+  allData = rbind(allData, tempData)
+}
+for (fid in c(10:11))
+{
+  filename = paste0("2018",as.character(fid),"_data.csv")
+  tempData = data.table::fread(filename, data.table = F,encoding = 'UTF-8')
+  allData = rbind(allData, tempData)
+}
+
+allData$Date_day <- as.numeric(as.Date(allData$Date))
+```
+
+## Scanning through Data
+
+
+```{r pressure, echo=FALSE}
+KP <- subset(allData, Page_Name=="柯文哲")
+summary(KP)
+
+```
+By summarying the data, we find out that there could be some posts revised repeatedly or deleted, resulting in similar meaning posts or zero context post in very low (nearly 0) reactions. The misleading imformation would pull our reaction count down, leading to a lower result.
+
+## Regrouping Data
+In order to solve the problem previous mentioned, I suggest a plausible assumption: the post being revised or reposted would be done in the very same day. Hence, finding out the maximum reaction counts could represent their very same post. 
+
+```{r}
+KP <- allData %>%
+  filter(Page_Name %in% c("柯文哲")) %>%
+  group_by(Page_Name, Type, Date_day) %>%
+  summarize(All_Reaction = max(All_Reaction_Count))
+
+```
+
+
+## Visualization
+
+```{r}
+library(ggplot2)
+theme_set(theme_classic())
+
+K <- ggplot(KP, aes(x = Type, y = All_Reaction)) +geom_boxplot()+
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="柯P", 
+       subtitle="The Effect of Types of Posts on Social Media during Chief Executive Election",
+       x="Types",
+       y="All Reaction Counts")+
+  scale_y_continuous(limits=c(0, 520000), breaks=NULL)
+
+K
+
+```
+
+Result:
+Using link and status as types of posts has a relatively distinct low reaction counts, while photo posts distinguish among others, sometimes outlying in an outstanding result. 
