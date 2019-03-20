@@ -20,7 +20,8 @@ Data Science using on fiancial field
 The Understanding of Data
 
 ### 2019-03-21 Week 5  HW1 due
-[HW1](https://github.com/StegoHo/CSX-4001/blob/master/HW1.rmd)
+[HW1.rmd](https://github.com/StegoHo/CSX-4001/blob/master/HW1.rmd)
+[HW1.html](https://github.com/StegoHo/CSX-4001/blob/master/HW1.html)
     Understanding the Effect of Types of Posts on Social Media during Chief Executive Election - with 柯文哲 as example
 
 EDA and Visualization
