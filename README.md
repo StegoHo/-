@@ -26,3 +26,7 @@ The Understanding of Data
 Understanding the Effect of Types of Posts on Social Media during Chief Executive Election - with 柯文哲 as example
 
 EDA and Visualization
+
+## Spring Break 
+[HW1-3.rmd](https://github.com/StegoHo/CSX-4001/blob/master/HW1-3/HW1-3.Rmd)
+[HW1-3.html](https://stegoho.github.io/CSX-4001/HW1-3/HW1-3.html)
