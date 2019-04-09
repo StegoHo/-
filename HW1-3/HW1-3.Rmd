@@ -1,0 +1,109 @@
+---
+title: "The Effect of Types of Posts on Facebook during Election - Taking 柯文哲(Ke) as Example"
+author: "Stego"
+date: "2019.4.9"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+theme_set(theme_classic())
+setwd("C:/Users/Stego/Desktop/College/資料科學程式設計/HW1-3")
+```
+
+During the election, for politician, Facebook becomes an important instrument to convey their political views and policies. Candidates spent more and more money on the promulgation on Facebook. In this case, I will look into the Facebook fan pages of internet celebrity (politician), 柯文哲 (Ke),  to see the effect of different types of posts.
+
+## Load Files
+
+```{r}
+allData = data.frame()
+for(fid in c(1:9))
+{
+  filename = paste0("20180",as.character(fid),"_data.csv")
+  tempData = data.table::fread(filename, data.table = F,encoding = 'UTF-8')
+  allData = rbind(allData, tempData)
+}
+for (fid in c(10:11))
+{
+  filename = paste0("2018",as.character(fid),"_data.csv")
+  tempData = data.table::fread(filename, data.table = F,encoding = 'UTF-8')
+  allData = rbind(allData, tempData)
+}
+
+allData$Date_day <- as.numeric(as.Date(allData$Date))
+allData$Type <- as.factor(allData$Type)
+
+
+```
+
+## Scanning through Data
+```{r}
+KP <- subset(allData, Page_Name == "柯文哲")
+summary(KP)
+```
+
+
+By summarying the data, we find out that there could be some posts revised repeatedly or deleted, resulting in similar meaning posts or zero context posts in very low (nearly 0) reactions. The misleading imformation would pull our reaction counts down, leading to a lower result. 
+
+
+## Grouping Data
+
+In order to solve the problem previously mentioned, I suggest a plausible assumption: the post being revised or reposted would be done in the very same day. Hence, finding out the maximum reaction counts of the day could represent the very same post. Additionally, for every additional post in a day, the average engagement rate drops. That is, even though there could be more than one post a day, the effect would drop marginally.
+
+Since the ranges of reaction counts are wide, I would tranfer the counts into a "log" form. Furthermore, to avoid negative infinity in log, I tranfer all the zero to one.
+
+```{r}
+KP <- allData %>%
+  subset(Page_Name=="柯文哲") %>%
+  group_by(Page_Name, Type, Date_day) %>%
+  summarise(All_reaction = log(max(All_Reaction_Count)), log_Comment = log(max(Comment_Count)), log_Share = max(log(Share_Count))) %>%
+  mutate(All_Reaction = ifelse(All_reaction==-Inf, 0, All_reaction), log_comment=ifelse(log_Comment==-Inf, 0, log_Comment) , log_share = ifelse(log_Share==-Inf, 0, log_Share)) %>%
+  select(-All_reaction,-log_Comment, -log_Share)
+
+summary(KP)
+
+```
+
+
+## Visualization
+
+```{r}
+K_reaction <- ggplot(KP, aes(x = Type, y = All_Reaction)) +geom_boxplot()+
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="The Effect of Types of Posts on Facebook during Election", 
+       subtitle="All Reaction Counts",
+       x="Types",
+       y="All Reaction Counts")
+
+K_reaction
+
+K_comment <- ggplot(KP, aes(x = Type, y = log_comment)) +geom_boxplot()+
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="The Effect of Types of Posts on Facebook during Election", 
+       subtitle="Comment Counts",
+       x="Types",
+       y="Comments Counts")
+
+K_comment
+
+K_share <- ggplot(KP, aes(x = Type, y = log_share)) +geom_boxplot()+
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="The Effect of Types of Posts on Facebook during Election", 
+       subtitle="Share Counts",
+       x="Types",
+       y="Share Counts")
+
+K_share
+
+```
+
+Result:
+
+Considering only reaction counts, photo type of post has a distinguished effect, meanwhile the average of video post shouldn't be neglected. 
+Regarding on the comment counts, both photo and video post have a more outstanding effect comparing with others.
+Sharing counts on Facebook sometimes are held as the most effective way in marketing, since one should be very fond of the post to share it on personal pages. In this case, photo and video posts encounter huge success. 
+
+Finally, the result shows that in Ke’s fan page, photo and video posts are a better way in marketing. In my opinion, the reason can be possibly attributed to the marketing trend on Internet. To elaborate, Ke’s targets often highly expose themselves in Internet. Hence, photo and video could be more eye-catching, standing out from wordy posts.
