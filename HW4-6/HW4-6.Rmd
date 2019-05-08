@@ -1,0 +1,139 @@
+---
+title: "The Ideology of Media -- Taking Mayor Ke as Example"
+author: "何孟軒"
+date: "2019年5月8日"
+output: html_document
+---
+When it comes to Taiwanese newspapers, nearly everyone realizes that there are different ideologies incepted in different news agency. Hence, in this homework, I would try to use correlation test to demonstrate that, even now news posted on the web seeking for instant reaction, the news agency wouldn't focus on different aspcts of the very incident and the wordings of the titles wouldn't match for each others.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+``````{r packages, message=FALSE}
+library(tidyverse)
+library(jiebaR)
+library(devtools)
+10
+library(tidytext)
+library(tm)
+setwd("C:/Users/Stego/Desktop/College/資料科學程式設計/HW4-6")
+```
+
+## Load file
+```{r}
+allData = data.frame()
+for(fid in c(1:9))
+{
+  filename = paste0("20180",as.character(fid),"_data.csv")
+  tempData = data.table::fread(filename, data.table = F,encoding = 'UTF-8')
+  allData = rbind(allData, tempData)
+}
+for (fid in c(10:12))
+{
+  filename = paste0("2018",as.character(fid),"_data.csv")
+  tempData = data.table::fread(filename, data.table = F,encoding = 'UTF-8')
+  allData = rbind(allData, tempData)
+}
+
+tempData = data.table::fread("201901_data.csv", data.table = F,encoding = 'UTF-8')
+allData = rbind(allData, tempData)
+
+allData$Type <- as.factor(allData$Type)
+allData$Month <- str_extract(allData$Date, "\\d+/\\d+")
+```
+
+## Data Cleaning
+In this homework, I select to analyze tiltles because for news, titles are the shortened ones and could possibly be condensed in the media's predilection. That is, even though the contexts could possibly resemble to others' due to the same materials, however, the titles may be interpreted out of context.
+
+Titles of the news could mix with other unrelevent information. For example, it could have brackets telling that the news contains video or the news is written by certain media. In order to obtain clean data, we erase such information.
+
+Additionally, there are different ways to mention Mayor Ke, by calling professor (he was a professor  before), mayor or directly his name. In this case, I would simply regard all the title equally to make it easy because by now I can't think of any difference among them. However, there could some undiscovered difference in it.
+
+The filter I set to delete the reaction counts lower than 200 is for blocking immature data. Some posts are later deleted or revised, but the record still be jotted down. So, setting down a threshold hopefully could help the work done.
+
+```{r}
+News <- allData %>%
+  filter(Page_Name %in% c("自由時報", "聯合報", "China Times")) %>%
+  filter(!is.na(Link_Title), Type == "link", All_Reaction_Count > 200) %>%
+  mutate(title = str_replace(Link_Title, "\\w+／|\\w+》|【\\w+】|（\\w+）| - \\w+ - \\w+", "")) %>%
+  select(Month, Page_Name, title) %>%
+  mutate(title = str_replace(title, "柯P", "柯文哲")) 
+```
+
+## Segment
+To make the result more sensible, the  adjust on dictionary must be made. Therefore, I added some names of candidates and politician by edit_dict() and deleting the stopwords.
+
+
+```{r}
+seg_engine <- worker(type  = "mix", user  = "C:/Users/Stego/Documents/R/win-library/3.5/jiebaRD/dict/user.dict.utf8")
+
+News_token <- News %>%
+  mutate(words = purrr::map(title, 
+                     ~ segment(., jiebar = seg_engine))) %>%
+  unnest(words) %>%
+  filter(!str_detect(words, pattern = "\\d")) %>%
+  select(Month, Page_Name, words)
+
+zh_stopwords <- tibble(words = stopwords::stopwords(language = "zh", source = "misc")) 
+
+data_token_clean <- News_token %>% 
+    anti_join(zh_stopwords, by = "words") %>%
+    filter(words != ":")
+
+China_times <- data_token_clean %>% filter(Page_Name == "China Times")
+Free <- data_token_clean %>% filter(Page_Name == "自由時報")
+United <- data_token_clean %>% filter(Page_Name == "聯合報")
+
+China_dtm <- China_times %>% 
+  count(Month, words) %>% 
+  tidytext::cast_dtm(document = Month, term = words, value = n)
+
+Free_dtm <- Free %>% 
+  count(Month, words) %>% 
+  tidytext::cast_dtm(document = Month, term = words, value = n)
+
+United_dtm <- United %>%
+  count(Month, words) %>% 
+  tidytext::cast_dtm(document = Month, term = words, value = n)
+```
+
+## Correlation Test
+
+```{r}
+#Test 1: Finding the differences among newspaper in constant correlation
+findAssocs(China_dtm, terms = "柯文哲", corlimit = 0.8)
+findAssocs(Free_dtm, terms = "柯文哲", corlimit = 0.8)
+findAssocs(United_dtm, terms = "柯文哲", corlimit = 0.8)
+
+#Test 2: Finding the correlation on certain incident
+cor(as.matrix(China_dtm)[, "柯文哲", drop = FALSE], 
+    as.matrix(China_dtm)[, "器官", drop = FALSE])
+
+cor(as.matrix(Free_dtm)[, "柯文哲", drop = FALSE], 
+    as.matrix(Free_dtm)[, "器官", drop = FALSE])
+
+cor(as.matrix(United_dtm)[, "柯文哲", drop = FALSE], 
+    as.matrix(United_dtm)[, "器官", drop = FALSE])
+
+#Test 3: Finding the correlation of Mayor Ke between newspaper
+cor(as.matrix(China_dtm)[, "柯文哲", drop = FALSE], 
+    as.matrix(Free_dtm)[, "柯文哲", drop = FALSE])
+
+cor(as.matrix(United_dtm)[, "柯文哲", drop = FALSE], 
+    as.matrix(Free_dtm)[, "柯文哲", drop = FALSE])
+
+cor(as.matrix(United_dtm)[, "柯文哲", drop = FALSE], 
+    as.matrix(China_dtm)[, "柯文哲", drop = FALSE])
+
+```
+
+During the first test, at 0.8 correlation, it turns out that there is no term that matches another newspaper, indicating that the titles among newspaper could diverse.
+
+The second test states that the incident of Organ transplantation suspicion of mayor Ke has a different relationship between China Times and the other two.
+
+As the third test showed, the correlation has a great difference between China Times and Udn, meanwhile the Freedom News seem to have a near 0.5 correlation with other news.
+
+
+## Conclusion
+To sum, this is a rather simple and less-developed essay. However, this work do find that there are still differences in wordings for different news agency. 
