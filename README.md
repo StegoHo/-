@@ -30,3 +30,7 @@ EDA and Visualization
 ## Spring Break 
 [HW1-3.rmd](https://github.com/StegoHo/CSX-4001/blob/master/HW1-3/HW1-3.Rmd)
 [HW1-3.html](https://stegoho.github.io/CSX-4001/HW1-3/HW1-3.html)
+
+## HW 4-6
+[HW4-6.html](https://stegoho.github.io/CSX-4001/HW4-6/HW4-6.html)
+[HW4-6.rmd](https://github.com/StegoHo/CSX-4001/blob/master/HW4-6/HW4-6.Rmd)
