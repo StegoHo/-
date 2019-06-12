@@ -48,9 +48,10 @@ Text-mining
 [HW4-6.html](https://stegoho.github.io/CSX-4001/HW4-6/HW4-6.html)
 
 ### Final Report
-The final report discusses the phenomenon when pitchers trying to speed up their fastball and how the phenomenon effects. That is, does speeding up fastball in very stuation turns out to be good? 
+The final report discusses the phenomenon when pitchers try to speed up their fastball and how the phenomenon effects. That is, does speeding up fastballs in the very stuation turns out to be effective? 
+
 Link is in following : 
 [Final Report.rmd](https://github.com/StegoHo/CSX-4001/blob/master/Final%20Report/Final-Project.rmd)
 [Final Report.html](https://stegoho.github.io/CSX-4001/Final%20Report/Final-Project.html)
 
-All files are in Final Report. However, the data is larger than 25MB, not being able to upload through github. The full dataset could be download [here](https://www.kaggle.com/pschale/mlb-pitch-data-20152018?fbclid=IwAR0UfqEZu5OVPcqCndl0mUvUIUx_rs2TBBQmV4rGY-7R-7Pv32ma4egeJ2A#pitches.csv).
+Notes: All files are in Final Report. However, some data is larger than 25MB, not being able to upload through github. The full dataset could be download [here](https://www.kaggle.com/pschale/mlb-pitch-data-20152018?fbclid=IwAR0UfqEZu5OVPcqCndl0mUvUIUx_rs2TBBQmV4rGY-7R-7Pv32ma4egeJ2A#pitches.csv).
