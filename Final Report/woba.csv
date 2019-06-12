@@ -1,0 +1,33 @@
+event,woba_value,woba_ab
+"wOBA	",0.31675,0
+"wOBAScale	",1.2185,0
+Walk,0.69025,1
+Hit By Pitch,0.7205,1
+"Single	",0.879,1
+"Double	",1.24425,1
+"Triple	",1.57325,1
+Home Run,2.02275,1
+"Groundout	",0,1
+"Strikeout	",0,1
+"Pop Out	",0,1
+Intent Walk,0,-1
+Lineout,0,1
+"Runner Out	",0,0
+"Flyout	",0,1
+Forceout,0,1
+Grounded Into DP,0,1
+"Sac Bunt 	",0,1
+Fielders Choice,0,1
+"Field Error	",0,1
+"Bunt Groundout 	",0,1
+Double Play,0,1
+Sac Fly,0,1
+"Fielders Choice Out	",0,1
+Bunt Pop Out,0,1
+"Catcher Interference	",0,1
+Strikeout - DP,0,1
+"Batter Interference	",0,1
+Sac Fly DP,0,1
+"Bunt Lineout	",0,1
+"Sacrifice Bunt DP	",0,1
+"Triple Play	",0,1

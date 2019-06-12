@@ -1,0 +1,424 @@
+---
+title: "MLB催球速研究"
+author: "何孟軒 林建廷"
+date: "2019年5月22日"
+output: html_document
+---
+
+球速是評價一名投手很直觀的要件，在一般的認知中，球速越快，打者反應時間越短，也越不容易擊中球。
+
+若在比賽時，看到投手每小時100英里的速球頻頻讓打者揮空，會感受到場面的鼓動。直球對決在棒球場上時常被認為是男子漢的對決，因為球筆直往前，沒有任何變化，打者打不打得到完全取決於自己的反應時間，若能夠連續讓人揮空，則代表投手極致的壓制能力。
+
+一般投手體力有限，尤其需要投長局數的投手，為了能夠拉長體力的續航力，投球必須配速，不能每球傾洪荒之力投出；又或者因為體力透支，隨著比賽進行球速持續下滑。
+
+但是，若投手遇到得點圈的危機，他會飆球速解決打者嗎？
+
+Justin Verlander是令我們印象深刻的投手，他除了以投球局數長度為名，更令人敬佩的是，關鍵時刻或七局之後，球速還能往上提升，動輒100英里的快速球仍能在比賽尾端出現，Youtube上也有網友上傳他超人的表現 www.youtube.com/watch?v=ocNchnNE0II)。 
+
+這個現象也引起我們的好奇，是否投手都能有這樣在關鍵時刻飆球速的表現？
+
+這次的資料來源來自Kaggle (https://www.kaggle.com/pschale/mlb-pitch-data-20152018?fbclid=IwAR0UfqEZu5OVPcqCndl0mUvUIUx_rs2TBBQmV4rGY-7R-7Pv32ma4egeJ2A#pitches.csv)。資料中詳細記載2015到2018例行賽中每個打席的對決資訊，包含球種、好壞球、進壘點等等。
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(tidyverse)
+library(lmtest)
+library(patchwork)
+```
+
+## 資料匯入與初步整理
+
+```{r}
+pitches <- read_csv("pitches.csv")
+atbats <- read_csv("atbats.csv")
+players <- read_csv("player_names.csv")
+games <- read_csv("games.csv")
+woba <- read_csv("woba.csv")
+
+#製成大dataset
+dataset <- pitches %>%
+  inner_join(atbats, by = "ab_id") %>%
+  inner_join(players, by = c("pitcher_id"="id")) %>%
+  #球員名字
+  mutate(name = paste(first_name, last_name, sep = "_")) %>%
+  select(-first_name, -last_name) %>%
+         #得點圈(二壘、三壘)是否有人
+  mutate(scoring_pos = ifelse(on_2b + on_3b >= 1, 1, 0), 
+         #調整左右投手相反的出手角度
+         break_angle = ifelse(p_throws == "L", -break_angle, break_angle))
+```
+
+## 球速與揮空率、出局率、wOBA的關係
+為了能夠衡量不同球速直球的壓制能力，我們以以下的數據做為參考
+
+揮空率：
+面對直球，打者揮空的比例
+
+出局率:
+簡言之，打者將直球揮擊入場出局的機率
+
+wOBA(Weighted On-base Average)：
+棒球的進階數據，用以衡量不同的表現對得分的影響，如一壘安打約能影響0.879分，而全壘打平均能製造2.02275分，出局則是零分。參數的來源來自2015~2018的平均表現。聯盟平均約是0.320，0.370視為優異，低於0.300則為差勁。
+詳細解釋可見(https://library.fangraphs.com/offense/woba/)
+
+```{r}
+#揮空率：球速越快揮空率越高
+Fastball_pitches <- dataset %>%
+  filter(pitch_type == "FF") %>%
+  #四捨五入
+  mutate(speed = round(start_speed)) %>%
+  count(speed) %>%
+  rename(all = n)
+
+dataset %>%
+  filter(pitch_type == "FF") %>%
+  mutate(speed = round(start_speed),
+         code = str_replace(code, "W", "S")) %>%
+  count(code, speed) %>%
+  inner_join(Fastball_pitches, by = "speed") %>%
+  filter(code == "S",
+         n >= 20) %>%
+  mutate(ratio = n/all) %>%
+  ggplot(aes(x = speed, y = ratio)) + geom_line() +
+  labs(x = "球速", y = "揮空率", title = "不同球速下打者揮空率變化")
+
+#出局率：球速越快出局率越高
+dataset %>%
+  group_by(ab_id) %>%
+  top_n(1, event_num) %>%
+  filter(pitch_type == "FF") %>%
+  inner_join(woba, by = "event") %>%
+  mutate(not_out = ifelse(woba_value > 0, 1, 0),
+         speed = round(start_speed)) %>%
+  group_by(speed) %>%
+  summarise(not_out = sum(not_out), all = n()) %>%
+  filter(all >= 35) %>%
+  mutate(out_ratio = 1 - (not_out/all)) %>%
+  ggplot(aes(x = speed, y = out_ratio)) + geom_line() +
+  labs(x = "球速", y = "出局率", title = "不同球速下打者出局率變化")
+  
+#woba：球速越快wOBA越高
+dataset %>%
+  group_by(ab_id) %>%
+  top_n(1, event_num) %>%
+  filter(pitch_type == "FF") %>%
+  mutate(speed = round(start_speed)) %>%
+  inner_join(woba, by = "event") %>%
+  group_by(speed) %>%
+  summarise(ab = sum(woba_ab), value = sum(woba_value))%>%
+  filter(ab >= 35) %>%
+  mutate(woba = value/ab) %>%
+  ggplot(aes(x = speed, y = woba)) + geom_line() +
+  labs(x = "球速", y = "WOBA", title = "不同球速下打者wOBA變化")
+```
+
+
+## 投手在壘上人數不同情況下的球速比
+我們想先了解，投手催球速的意願在何時最為明顯
+
+```{r}
+#計算壘上無人時投手的平均四縫線球速
+pitches_speed_empty <- dataset %>%
+    filter(pitch_type == "FF")%>%
+    filter(on_2b == 0, on_3b == 0)%>%
+    mutate(avg_speed = sum(start_speed)/n() )
+
+#計算一壘有人時投手的平均四縫線球速
+pitches_speed_first <- dataset %>%
+    filter(pitch_type == "FF")%>%
+    filter(on_1b == 1, on_2b == 0, on_3b == 0)%>%
+    mutate(avg_speed = sum(start_speed)/n() )
+
+#計算二壘有人時投手的平均四縫線球速
+pitches_speed_second <- dataset %>%
+    filter(pitch_type == "FF")%>%
+    filter(on_1b == 0, on_2b == 1, on_3b == 0)%>%
+    mutate(avg_speed = sum(start_speed)/n() )
+
+#計算三壘有人時投手的平均四縫線球速
+pitches_speed_third <- dataset %>%
+    filter(pitch_type == "FF" )%>%
+    filter(on_1b == 0, on_2b == 0, on_3b == 1)%>%
+    mutate(avg_speed = sum(start_speed)/n() )
+
+#計算二三壘有人時投手的平均四縫線球速
+pitches_speed_second_third <- dataset %>%
+    filter(pitch_type == "FF" )%>%
+    filter(on_1b == 0, on_2b == 1, on_3b == 1)%>%
+    mutate(avg_speed = sum(start_speed)/n() )
+
+
+#計算滿壘時投手的平均四縫線球速
+pitches_speed_full <- dataset %>%
+    filter(pitch_type == "FF" )%>%
+    filter(on_1b == 1, on_2b == 1, on_3b == 1)%>%
+    mutate(avg_speed = sum(start_speed)/n() )
+    
+base_speed <- data.frame( 
+ situation = c("無人在壘", "一壘有人", "二壘有人", "三壘有人", "二三壘有人", "滿壘"), 
+ speed = c(pitches_speed_empty$avg_speed[1], pitches_speed_first$avg_speed[1],
+           pitches_speed_second$avg_speed[1],pitches_speed_third$avg_speed[1],
+           pitches_speed_second_third$avg_speed[1],pitches_speed_full$avg_speed[1]) )
+
+#製圖
+ggplot(base_speed, aes(x = situation, y = speed, group = 1)) +
+    scale_x_discrete(limits=c("無人在壘","一壘有人", "二壘有人","三壘有人","二三壘有人","滿壘"))+
+    geom_line() +    
+    labs(x = "壘上人數", y = "球速", title = "投手在不同情況下球速比較")
+```
+
+可見投手在壘上越多人，越靠近本壘時越有催球速的傾向，且一壘有人催球速意願不明顯，因此往後以得點圈有人(二或三壘有人)繼續催球速的研究。
+
+## 投手在不同球數下的球速比較
+
+```{r}
+#計算沒有好球時投手的平均四縫線球速
+pitches_speed_0s <- dataset %>%
+    filter(pitch_type == "FF")%>%
+    filter(s_count == 0)%>%
+    mutate(avg_speed = sum(start_speed)/n() )
+
+#計算一好球時投手的平均四縫線球速
+pitches_speed_1s <- dataset %>%
+    filter(pitch_type == "FF")%>%
+    filter(s_count == 1)%>%
+    mutate(avg_speed = sum(start_speed)/n() )
+
+#計算兩好球時投手的平均四縫線球速
+pitches_speed_2s <- dataset %>%
+    filter(pitch_type == "FF")%>%
+    filter(s_count == 2)%>%
+    mutate(avg_speed = sum(start_speed)/n() )
+
+#好球製圖
+s_count_speed <- data.frame(
+  situation = c("零好球","一好球","兩好球"), 
+  speed = c(pitches_speed_0s$avg_speed[1] ,pitches_speed_1s$avg_speed[1],
+            pitches_speed_2s$avg_speed[1]) )
+
+ggplot(s_count_speed, aes(x = situation, y = speed, group = 1)) +
+    scale_x_discrete(limits=c("零好球","一好球","兩好球"))+
+    geom_line() +    
+    labs(x = "球數", y = "球速", title = "投手在不同好球下球速比較")
+```
+
+由上述統計可看出投手在較關鍵的時刻，如好球數較多將解決打者的時刻，以及壘上的人越多，或是越接近本壘時越有催球速的傾向。
+
+
+## 催球速檢定
+
+為了使催球速的情況能夠被較精準的判定，我們使用t.test檢視是否顯著。我們先求出個別投手的平均以及標準差，若球速大於平均一標準差，則視為投手催球速，故speed_up欄位為1，反之則為0。接著，我們篩選出兩個tibble，一個是speed_up為1，另一是為0，用t.test檢驗兩者的大小關係。
+
+```{r}
+FB <- dataset %>%
+  filter(pitch_type == "FF") %>%
+  mutate(#將好球帶外的揮空球視為好球
+         Code = str_replace(code, "W", "S"), 
+         all = n(),
+         #是否揮空
+         swgstr_bo = ifelse(Code == "S", 1, 0))
+
+#各別投手球速平均值與標準差
+pit_id <- FB %>%
+  group_by(pitcher_id) %>%
+  summarise(sd = sd(start_speed), mn = mean(start_speed), pit_all = n())
+
+#有催球速
+FB_test_speed_up <- FB %>%
+  inner_join(pit_id, by = "pitcher_id") %>%
+  #若球速超過該名平均值一個標準差，則視為催球速
+  mutate(speed_up = ifelse((start_speed - mn)/sd >= 1, 1, 0 )) %>%
+  select(start_speed, scoring_pos, speed_up) %>%
+  filter(speed_up == 1, scoring_pos == 1)
+
+#沒有催球速
+FB_test_speed_same <- FB %>%
+  inner_join(pit_id, by = "pitcher_id") %>%
+  mutate(speed_up = ifelse((start_speed - mn)/sd >= 1, 1, 0 )) %>%
+  select(start_speed, scoring_pos, speed_up) %>%
+  filter(speed_up == 0, scoring_pos == 0)
+
+#因樣本數不同，故隨機選取同催球速的樣本，再以t.test檢驗
+FB_test_speed_same_sample <- FB_test_speed_same %>% sample_n(43487)
+t.test((FB_test_speed_up$start_speed - FB_test_speed_same_sample$start_speed), 
+       alternative = "greater", conf.level = 0.95)
+```
+
+P值極小，結果顯示催球速的行為相當顯著，驗證投手在快要被得分的時候會催球速，希望能壓制打者。
+
+
+## 催球速的效果如何?
+
+
+####投手催球速傾向比較
+選取投球數五千以上的投手，僅取四縫線直球這一個球種，計算投手在得點圈有人時的球速減去其均速後再除以球速的標準差，得到一個數值，而此數值越大即為越傾向催球速的投手
+
+```{r}
+pitcher_speed <- dataset %>%
+        group_by(pitcher_id) %>%
+        mutate(pitches = n()) %>%
+        filter(pitches > 5000) %>%
+        ungroup() %>%
+        filter(pitch_type == "FF") %>%
+        group_by(pitcher_id) %>%
+        mutate(avg_speed = mean(start_speed, na.rm = TRUE)) %>%
+        mutate(deviation_speed = sd(start_speed)) %>%
+        ungroup() %>%
+        filter(on_2b == 1 | on_3b == 1) %>%
+        group_by(pitcher_id) %>%
+        mutate(onbase_avg_speed = mean(start_speed, na.rm = TRUE)) %>%
+        mutate(value = (start_speed - avg_speed)/ deviation_speed) %>%
+        mutate(speed_avg_SD = mean(value) ) %>%
+        ungroup() %>%
+        select(pitcher_id, name, speed_avg_SD, pitches) %>%
+        group_by(pitcher_id) %>%
+        unique() %>%
+        arrange(-speed_avg_SD)
+
+#十大催球速傾向的選手
+pitcher_speed$name[1:10]
+ 
+```
+
+
+####關鍵時刻最強的投手
+
+同樣選取投球數量五千以上的投手，計算其在得點圈有人時的被打擊率，並從被打擊率低到高給予分數(0到160)，被打擊率最低者得160分，第二低者為159分，以此類推。
+```{r}
+pitcher_situation <- dataset %>%
+        group_by(pitcher_id) %>%
+        mutate(pitches = n()) %>%
+        filter(pitches > 5000) %>%
+        ungroup() %>%
+        filter(on_2b == 1 | on_3b == 1) %>%
+        select(ab_id, event, pitcher_id, name) %>%
+        group_by(pitcher_id) %>%
+        mutate(at_bats = n()) %>%
+        ungroup() %>%
+        filter(event == "Single" | event == "Double" | event == "Triple" | event == "Home Run") %>%
+        group_by(pitcher_id) %>%
+        mutate(hits = n()) %>%
+        mutate(batter_avg = hits / at_bats) %>%
+        select(pitcher_id, name, batter_avg) %>%
+        unique() %>%
+        arrange(-batter_avg)
+
+pitcher_situation <- rownames_to_column(pitcher_situation, "rating")
+
+#分數前十的選手
+pitcher_situation$name[1:10]
+       
+```
+
+
+####合併資料並檢視
+合併上述兩資料並做圖，檢視關鍵時刻催球速與否和關鍵時刻表現間的關係
+
+```{r}
+all_data <- right_join(pitcher_situation, pitcher_speed, by = c("pitcher_id", "name") )
+
+ggplot(all_data, aes(speed_avg_SD, as.numeric(rating)))+
+layer( geom = "point",
+  stat = "identity",
+  position = "identity",
+  params = list(na.rm = FALSE) )+ 
+  labs(x = "關鍵時刻催球速傾向(標準差)", y = "關鍵時刻表現分數", title = "關鍵時刻催球速與否和關鍵時刻表現間的關係",color = "Sentiment")
+```
+就結果來看，催球速與否與關鍵時刻的表現與預想的不同，似乎無太大的關聯。
+
+
+
+以下進一步比較催球速前後對打者的影響，得點圈沒有人沒有催球速，與得點圈有人投手催球速相比，催球速是否如預期地隊打者造成影響
+```{r}
+FB_test <- FB %>%
+  inner_join(pit_id, by = "pitcher_id") %>%
+  mutate(speed_up = ifelse((start_speed - mn)/sd >= 1, 1, 0 ))
+
+#揮空率
+FB_OB_swg <- FB_test %>%
+  filter((scoring_pos == 1 & speed_up == 1) | (scoring_pos == 0 & speed_up == 0)) %>%
+  count(speed_up) %>%
+  rename(all = n)
+
+FB_test %>%
+  filter((scoring_pos == 1 & speed_up == 1) | (scoring_pos == 0 & speed_up == 0)) %>%
+  count(code, speed_up) %>%
+  inner_join(FB_OB_swg, by = "speed_up") %>%
+  filter(code == "S", n >= 20) %>%
+  mutate(ratio = n/all) %>%
+  ggplot(aes(as.factor(speed_up), ratio)) + geom_col()+
+  labs(x = "是否催球速(0為無,1為有)", y = "揮空率")
+
+  
+#出局率
+FB_test %>%
+  filter((scoring_pos == 1 & speed_up == 1) | (scoring_pos == 0 & speed_up == 0)) %>%
+  group_by(ab_id) %>%
+  top_n(1, event_num) %>%
+  inner_join(woba, by = "event") %>%
+  mutate(not_out = ifelse(woba_value > 0, 1, 0)) %>%
+  group_by(scoring_pos, speed_up) %>%
+  summarise(not_out = sum(not_out), all = n()) %>%
+  mutate(out_ratio = not_out/all) %>%
+  ggplot(aes(as.factor(speed_up), out_ratio)) + geom_col()+
+  labs(x = "是否催球速(0為無,1為有)", y = "出局率")
+  
+#woba
+FB_test %>%
+  filter((scoring_pos == 1 & speed_up == 1) | (scoring_pos == 0 & speed_up == 0)) %>%
+  inner_join(woba, by = "event") %>%
+  group_by(scoring_pos, speed_up) %>%
+  summarise(ab = sum(woba_ab), value = sum(woba_value))%>%
+  mutate(woba = value/ab) %>%
+  ggplot(aes(as.factor(speed_up), woba)) + geom_col()+
+  labs(x = "是否催球速(0為無,1為有)", y = "woba")
+
+```
+
+打者在得點圈面對投手催速球的狀況十分有趣。投手為了凍結壘上跑者，把失分降到最低，用力催球速，雖然揮空率增加，wOBA下降，但出局比率卻大致相同，可見此時打者也會放棄產生應對的策略，較不追求長打，穩扎穩打，先讓自己上壘，延續球隊攻勢。
+
+
+
+## 延伸問題：增加球速是否造成控球走樣
+
+好球帶的大小並非固定，雖然他的寬度是固定(資料中為x軸，約本壘板寬)，但他的高度取決於打者身高、打擊姿勢(膝蓋至肩與褲腰的中點)。因此，此處參考網站中的平均好球帶大小(inch)，並轉換成feet。
+(https://www.baseballprospectus.com/news/article/40891/prospectus-feature-the-universal-strike-zone/)
+為了取得投手控球的狀況，我們製作變數dist，抓取投球位置與好球帶的最短距離，來衡量投手控球能力
+```{r}
+FB <- FB_test %>%
+  filter(pitch_type == "FF") %>%
+  filter((scoring_pos == 1 & speed_up == 1) | (scoring_pos == 0 & speed_up == 0)) %>%
+  mutate(#將x軸(平行本壘板面)鏡射翻轉
+         Px = abs(px), 
+         #是否為好球帶周圍1.5顆球
+         edge = ifelse(0.4625 <= Px & Px <= 0.83, 
+                       ifelse((3.01325 <= pz & pz <= 3.5) | (1.7 <= pz & pz<= 2.085), 1, 0)
+                       , 0),
+         #距離好球帶四周的最短距離
+         dist = pmin( abs(Px - 0.8079), abs(pz - 1.7175), abs(pz - 3.506) ) )
+
+#dist vs. 催球速
+
+speed_up_vs_dist <- lm(dist ~ speed_up, FB) 
+summary(speed_up_vs_dist)
+
+```
+
+speed_up為dummy variable，與好球帶邊緣距離為負相關，得點圈有人飆球速反而更接近好球帶周圍，可能代表投手在關鍵時更為專注。但p值約6%，視為不顯著，意即投手在得點圈有人時飆球速對控球的影響不明顯。總而言之，與想像中飆球速與控球的負向關係不同。
+
+
+
+## 結論:
+此次報告我們想要了解投手在關鍵時刻(得點圈有人)究竟會不會催球速，催球速對於解決打者是否有無幫助，還有是否會產生其他的影響。
+
+首先在投手是否會催球速這個部分，在投手在壘上人數不同情況下球速比較的圖中，我們可發現投手在壘上越多人，且跑者距離本壘越近時越有催球速的傾向；而投手在不同球數下的球速比較的圖中，也發現投手在好球數越多，越接近解決打者時球速會越快。而在隨後的催球速檢定中，透過P值的檢驗也讓我們得知催球速行為相當顯著，可知投手確實是會有催球速這個行為產生。
+
+接下來我們開始探討催球速的效果如何，透過計算投手在得點圈有人時的球速減去其均速後再除以球速的標準差，得到一個數值，可藉此比較出投手催球速的傾向。同時再透過投手在得點圈有人時的被打擊率，給予投手關鍵時刻表現的分數。將以上兩者畫成「關鍵時刻催球速與否和關鍵時刻表現間的關係」一圖，由圖中的結果可看出催球速與否與關鍵時刻的表現似乎無太大的關聯。
+
+緊接著我們進一步分析是否催球速對於揮空率、出局率、wOBA的影響，由圖片可看出催球速會使打者的揮空率上升、wOBA下降，但出局比率卻大致相同，可能的解釋是打者在關鍵時刻也會產生應對的策略，不求長打，穩扎穩打想辦法上壘，延續球隊攻勢。
+
+最後我們研究了增加球速是否會造成控球走樣，因為一般來說普遍認為若要讓球速越快，勢必會犧牲一些控球，然而最終做出的結果發現投手在得點圈有人時飆球速對控球的影響並不明顯，出乎我們意料。
+
+總結來說，投手在關鍵時刻確實是會有催球速的情形產生，而以我們所做出的結果來看，關鍵時刻催球速與否與能否有效解決打者間的關係並不大，也就是說，在關鍵時刻選擇對打者加快球速的投手，並不一定能較有效的解決打者；而反過來說，就算在關鍵時刻維持平常球速，甚至是降低球速的投手，也不代表不能有效解決打者，催球速與能否有效解決打者並無直接關係。這樣的結果也使得我們無法依據球速提升與否來製造關鍵時刻危機處理的能力數據，根據結果顯示，提速與解決打者與否並無直接關係。
